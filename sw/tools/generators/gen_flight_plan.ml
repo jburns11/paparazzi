@@ -182,6 +182,23 @@ let print_exception = fun out x ->
     )
   end
 
+let print_adaptation = fun out x ->
+  let att_exists = fun x a ->
+    try let _ = Xml.attrib x a in true with Xml.No_attribute _ -> false
+  in
+  let guard = parsed_attrib x "guard" in
+  let variable = parsed_attrib x "var" in
+  let adaptation = parsed_attrib x "value" in
+  if att_exists x "min" && att_exists x "max"
+  then begin
+    let min = parsed_attrib x "min" in
+    let max = parsed_attrib x "max" in
+    lprintf out "if (%s) {%s = %s; Bound(%s,%s,%s); printf(\"ADAPTATION CHECK %s\", %s);}\n" guard variable adaptation variable min max "%f" variable
+  end else begin
+    lprintf out "if (%s) {%s = %s}\n" guard variable adaptation
+  end
+
+
 
 let element = fun a b c -> Xml.Element (a, b, c)
 let goto l = element "goto" ["name",l] []
@@ -313,7 +330,7 @@ let rec index_stage = fun x ->
       | "survey_rectangle" | "eight" | "oval"->
         incr stage; incr stage;
         Xml.Element (Xml.tag x, Xml.attribs x@["no", soi !stage], Xml.children x)
-      | "exception" ->
+      | "exception"  | "adaptation" ->
         x
       | s -> failwith (sprintf "Unknown stage: %s\n" s)
   end
@@ -646,7 +663,7 @@ let indexed_stages = fun blocks ->
           if (ExtXml.tag_is stage "for" || ExtXml.tag_is stage "while") then
             List.iter f (Xml.children stage)
         with Xml.No_attribute "no" ->
-          assert (ExtXml.tag_is stage "exception")
+          assert (ExtXml.tag_is stage "exception"  || ExtXml.tag_is stage "adaptation")
       in
       List.iter f (Xml.children b))
     blocks;
@@ -681,6 +698,11 @@ let print_block = fun out index_of_waypoints (b:Xml.xml) block_num ->
     List.partition (fun x -> Xml.tag x = "exception") (Xml.children b) in
 
   List.iter (print_exception out) excpts;
+
+  let adaptations, stages =
+    List.partition (fun x -> Xml.tag x = "adaptation") (stages) in
+
+  List.iter (print_adaptation out) adaptations;
 
   lprintf out "switch(nav_stage) {\n";
   right ();
