@@ -195,7 +195,7 @@ let print_adaptation = fun out x ->
     let max = parsed_attrib x "max" in
     lprintf out "if (%s) {%s = %s; Bound(%s,%s,%s); printf(\"ADAPTATION CHECK %s\", %s);}\n" guard variable adaptation variable min max "%f" variable
   end else begin
-    lprintf out "if (%s) {%s = %s}\n" guard variable adaptation
+    lprintf out "if (%s) {%s = %s;}\n" guard variable adaptation
   end
 
 
@@ -206,6 +206,8 @@ let exit_block = element "exit_block" [] []
 let home_block = Xml.parse_string "<block name=\"HOME\"><home/></block>"
 
 let stage = ref 0
+
+let task = ref 0
 
 let output_label out l = lprintf out "Label(%s)\n" l
 
@@ -330,7 +332,7 @@ let rec index_stage = fun x ->
       | "survey_rectangle" | "eight" | "oval"->
         incr stage; incr stage;
         Xml.Element (Xml.tag x, Xml.attribs x@["no", soi !stage], Xml.children x)
-      | "exception"  | "adaptation" ->
+      | "exception"  | "adaptation" | "task"->
         x
       | s -> failwith (sprintf "Unknown stage: %s\n" s)
   end
@@ -663,7 +665,7 @@ let indexed_stages = fun blocks ->
           if (ExtXml.tag_is stage "for" || ExtXml.tag_is stage "while") then
             List.iter f (Xml.children stage)
         with Xml.No_attribute "no" ->
-          assert (ExtXml.tag_is stage "exception"  || ExtXml.tag_is stage "adaptation")
+          assert (ExtXml.tag_is stage "exception"  || ExtXml.tag_is stage "adaptation" || ExtXml.tag_is stage "task")
       in
       List.iter f (Xml.children b))
     blocks;
@@ -687,37 +689,96 @@ let index_blocks = fun xml ->
   Xml.Element (Xml.tag xml, Xml.attribs xml, indexed_blocks)
 
 
-
-let print_block = fun out index_of_waypoints (b:Xml.xml) block_num ->
-  let n = name_of b in
-  (* Block entry *)
-  lprintf out "Block(%d) // %s\n" block_num n;
-  fp_pre_call out b;
-
-  let excpts, stages =
-    List.partition (fun x -> Xml.tag x = "exception") (Xml.children b) in
-
-  List.iter (print_exception out) excpts;
-
-  let adaptations, stages =
-    List.partition (fun x -> Xml.tag x = "adaptation") (stages) in
-
-  List.iter (print_adaptation out) adaptations;
-
+let print_task_conditions = fun out index_of_waypoints (b:Xml.xml) task_num ->
+  let g = ExtXml.attrib b "guard" in
+  if (compare g "default" = -1) then
+    lprintf out "if (%s && nav_task != %d) {nav_goto_task(%d);} \n" g task_num task_num
+  
+let print_task = fun out index_of_waypoints (b:Xml.xml) task_num ->
+  let stages = Xml.children b in
+  lprintf out "Task(%d) // %s\n" task_num (name_of(b));
+  lprintf out "printf(\"hello 3 %s %s \\n\", nav_task, nav_stage);\n" "%d" "%d";
+  right ();
   lprintf out "switch(nav_stage) {\n";
   right ();
   stage := (-1);
   List.iter (print_stage out index_of_waypoints) stages;
-
   print_stage out index_of_waypoints exit_block;
-
   left ();
   lprintf out "}\n";
+  lprintf out "break;\n";
+  left ()
 
-  (* Block exit *)
-  fp_post_call out b;
-  lprintf out "break;\n\n"
+let print_block = fun out index_of_waypoints (b:Xml.xml) block_num ->
+  if Xml.tag b = "adaptive_block" then
+    let n = name_of b in
+    (* Block entry *)
+    lprintf out "Block(%d) // %s\n" block_num n;
+    lprintf out "printf(\"hello 1 %s %s \\n\", nav_task, nav_stage);\n" "%d" "%d";
+    fp_pre_call out b;
 
+    let excpts, other =
+      List.partition (fun x -> Xml.tag x = "exception") (Xml.children b) in
+
+    List.iter (print_exception out) excpts;
+
+    let adaptations, other =
+      List.partition (fun x -> Xml.tag x = "adaptation") (Xml.children b) in
+
+    let tasks, other =
+      List.partition (fun x -> Xml.tag x = "task") (Xml.children b) in
+
+    List.iter (print_adaptation out) adaptations;
+
+    task := (-1);
+
+    List.iter (fun t -> incr task; print_task_conditions out index_of_waypoints t !task) tasks;
+
+
+    lprintf out "switch(nav_task) {\n";
+    right ();
+    task := (-1);
+    List.iter (fun t -> incr task; print_task out index_of_waypoints t !task) tasks;
+    lprintf out "default:\n";
+    lprintf out "printf(\"hello 2 %s %s \\n\", nav_task, nav_stage);\n" "%d" "%d";
+    lprintf out "NextBlock();\n";
+    lprintf out "break;\n";
+    left ();
+    lprintf out "}\n";
+
+    (* Block exit *)
+    fp_post_call out b;
+    lprintf out "break;\n\n"
+  else begin
+    let n = name_of b in
+    (* Block entry *)
+    lprintf out "Block(%d) // %s\n" block_num n;
+    fp_pre_call out b;
+
+    let excpts, stages =
+      List.partition (fun x -> Xml.tag x = "exception") (Xml.children b) in
+
+    List.iter (print_exception out) excpts;
+
+    let adaptations, stages =
+      List.partition (fun x -> Xml.tag x = "adaptation") (stages) in
+
+    List.iter (print_adaptation out) adaptations;
+
+    lprintf out "switch(nav_stage) {\n";
+    right ();
+    stage := (-1);
+    List.iter (print_stage out index_of_waypoints) stages;
+
+    print_stage out index_of_waypoints exit_block;
+
+    left ();
+    lprintf out "}\n";
+
+    (* Block exit *)
+    fp_post_call out b;
+    lprintf out "break;\n\n"
+  end
 
 
 let print_blocks = fun out index_of_waypoints bs ->
@@ -1047,6 +1108,8 @@ let print_flight_plan_h = fun xml utm0 xml_file out_file ->
   List.iter (fun b -> fprintf out " \"%s\" , \\\n" (ExtXml.attrib b "name")) blocks;
   lprintf out "}\n";
   Xml2h.define_out out "NB_BLOCK" (string_of_int (List.length blocks));
+
+  Xml2h.define_out out "NB_TASK" (string_of_int (List.length blocks)); (*TODO JACK INDEX TASKS*)
 
   Xml2h.define_out out "GROUND_ALT" (sof !ground_alt);
   Xml2h.define_out out "GROUND_ALT_CM" (sprintf "%.0f" (100.*. !ground_alt));

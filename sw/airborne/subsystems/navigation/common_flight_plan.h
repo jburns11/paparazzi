@@ -30,22 +30,27 @@
 #include "std.h"
 
 /** In s */
-extern uint16_t stage_time, block_time;
+extern uint16_t stage_time, block_time, task_time;
 
-extern uint8_t nav_stage, nav_block;
-extern uint8_t last_block, last_stage;
+extern uint8_t nav_stage, nav_block, nav_task;
+extern uint8_t last_block, last_stage, last_task;
 
 /** needs to be implemented by fixedwing and rotorcraft seperately */
 void nav_init_stage(void);
-
 void nav_init_block(void);
 void nav_goto_block(uint8_t block_id);
+void nav_init_task(void);
+void nav_goto_task(uint8_t task_id);
 
 #define InitStage() nav_init_stage();
 
 #define Block(x) case x: nav_block=x;
 #define NextBlock() nav_goto_block(nav_block + 1)
 #define GotoBlock(b) nav_goto_block(b)
+
+#define Task(x) case x: nav_task=x;
+#define NextTask() nav_goto_task(nav_task + 1)
+#define GotoTask(x) nav_goto_task(x)
 
 #define Stage(s) case s: nav_stage=s;
 #define NextStage() { nav_stage++; InitStage(); } INTENTIONAL_FALLTHRU
@@ -54,6 +59,7 @@ void nav_goto_block(uint8_t block_id);
 
 #define Label(x) label_ ## x:
 #define Goto(x) { goto label_ ## x; }
+#define TaskGoto(x) {goto label_ ## x;}
 #define Return(x) { nav_block=last_block; if (x==1) {nav_stage=0;} else {nav_stage=last_stage;} block_time=0;}
 
 #define And(x, y) ((x) && (y))

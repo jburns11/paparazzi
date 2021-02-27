@@ -184,6 +184,7 @@ void nav_init(void)
 
   nav_block = 0;
   nav_stage = 0;
+  nav_task = 0;
   nav_altitude = POS_BFP_OF_REAL(SECURITY_HEIGHT);
   nav_flight_altitude = nav_altitude;
   flight_altitude = SECURITY_ALT;

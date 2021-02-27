@@ -28,11 +28,15 @@
 <!ELEMENT exceptions (exception*)>
 
 
-<!ELEMENT blocks (block+)>
+<!ELEMENT blocks (block|adaptive_block)+>
 <!ELEMENT block (exception|while|heading|attitude|manual|go|xyz|set|call|call_once|circle|deroute|stay|follow|survey_rectangle|for|return|eight|oval|home|path|adaptation)*>
 
-<!ELEMENT adaptation EMPTY>
+<!ELEMENT task (while|heading|attitude|manual|go|xyz|set|call|call_once|circle|deroute|stay|follow|survey_rectangle|for|return|eight|oval|home|path)*>
 
+<!ELEMENT adaptive_block (task)+>
+
+
+<!ELEMENT adaptation EMPTY>
 <!ELEMENT include (arg|with)*>
 <!ELEMENT arg EMPTY>
 <!ELEMENT with EMPTY>
@@ -150,11 +154,19 @@ group CDATA #IMPLIED
 key CDATA #IMPLIED
 description CDATA #IMPLIED>
 
+<!ATTLIST adaptive_block
+name CDATA #REQUIRED>
+
+<!ATTLIST task
+name CDATA #REQUIRED
+guard CDATA #REQUIRED
+description CDATA #IMPLIED>
 
 <!ATTLIST adaptation
 guard CDATA #REQUIRED
 var CDATA #REQUIRED
 value CDATA #REQUIRED
+antivalue CDATA #IMPLIED
 min CDATA #IMPLIED
 max CDATA #IMPLIED>
 

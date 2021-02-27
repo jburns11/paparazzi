@@ -30,12 +30,12 @@
 
 
 /** In s */
-uint16_t stage_time, block_time;
+uint16_t stage_time, block_time, task_time;
 
-uint8_t nav_stage, nav_block;
+uint8_t nav_stage, nav_block, nav_task;
 
 /** To save the current block/stage to enable return */
-uint8_t last_block, last_stage;
+uint8_t last_block, last_stage, last_task;
 
 
 void nav_init_block(void)
@@ -45,6 +45,14 @@ void nav_init_block(void)
   }
   nav_stage = 0;
   block_time = 0;
+  nav_task = 0;
+  InitStage();
+}
+
+void nav_init_task(void)
+{
+  nav_stage = 0;
+  task_time = 0;
   InitStage();
 }
 
@@ -56,4 +64,15 @@ void nav_goto_block(uint8_t b)
   }
   nav_block = b;
   nav_init_block();
+}
+
+void nav_goto_task(uint8_t t)
+{
+  if (t != nav_task) { /* To avoid a loop in a the current task */
+    last_task = nav_task;
+    last_stage = nav_stage;
+  }
+  nav_task = t;
+  nav_stage = 0;
+  nav_init_task();
 }

@@ -5,18 +5,28 @@
 #include "autopilot.h"
 #include "modules/nav/nav_survey_rectangle_rotorcraft.h"
 #include "subsystems/electrical.h"
+#include "subsystems/datalink/datalink.h"
+#define NAV_SURVEY_RECTANGLE_DYNAMIC
+#define FOLLOW_WAYPOINT_ID 2 
+#define NAV_FOLLOW_PGAIN 1
+#define FOLLOW_AC_ID 32
   </header>
   <waypoints>
+    <waypoint name="FOLLOW_WP" x="0.0" y="0.0"/>
     <waypoint name="HOME" x="0.0" y="0.0"/>
     <waypoint name="CLIMB" x="0.0" y="5.0"/>
     <waypoint name="STDBY" x="-2.0" y="-5.0"/>
-    <waypoint name="p1" x="-300" y="20"/>
-    <waypoint name="p2" x="300" y="-20"/>
+    <waypoint name="p1" x="-100" y="20"/>
+    <waypoint name="p2" x="100" y="-20"/>
     <waypoint name="p3" x="16.7" y="-19.6"/>
     <waypoint name="p4" x="13.7" y="-40.7"/>
     <waypoint name="CAM" x="-20" y="-50" height="2."/>
     <waypoint name="TD" x="5.6" y="-10.9"/>
   </waypoints>
+  <variables>
+    <variable var="dist_var" init="50.0"/>
+    <variable var="height_var" init="25.0"/>
+  </variables>
   <blocks>
     <block name="Wait GPS">
       <call_once fun="NavKillThrottle()"/>
@@ -36,17 +46,32 @@
       <attitude pitch="0" roll="0" throttle="0" vmode="throttle" until="FALSE"/>
     </block>
     <block name="Takeoff" strip_button="Takeoff" strip_icon="takeoff.png">
-      <exception cond="stateGetPositionEnu_f() @DEREF z @GT 2.0" deroute="Standby"/>
+      <exception cond="stateGetPositionEnu_f() @DEREF z @GT 2.0" deroute="SignalLoss"/>
       <call_once fun="NavSetWaypointHere(WP_CLIMB)"/>
       <stay vmode="climb" climb="nav_climb_vspeed" wp="CLIMB"/>
     </block>
     <block name="Standby" strip_button="Standby" strip_icon="home.png">
       <stay wp="STDBY"/>
     </block>
-    <block key="F8" name="Battery Aware Survey">
+    <block name="Battery Aware Survey">
       <survey_rectangle grid="sweep" wp1="p1" wp2="p2" orientation="NS"/>
-      <adaptation var="sweep" guard="1" value="((12.5/electrical.vsupply)*20)" max="50" min="5"/>
+      <adaptation var="sweep" guard="1" value="10+(12.4-electrical.vsupply)*50" max="50" min="5"/>
     </block>
+    <block name="Safe Adaptive Follow">
+      <follow ac_id="32" distance="dist_var" height="height_var"/>
+      <!--<adaptation var="dist_var" guard="state.airspeed_f > 4.5" value="50" antivalue="25"/>
+      <adaptation var="height_var" guard="WaypointAlt(1)>100" value="100-WaypointAlt(1)" antivalue="20"/>-->
+    </block>
+
+    <adaptive_block name="SignalLoss">
+      <task name="survey" guard="default">
+        <survey_rectangle grid="sweep" wp1="p1" wp2="p2" orientation="NS"/>
+      </task>
+      <task name="signal track" guard="MoreThan(datalink_time, 10)">
+        <circle radius="nav_radius" wp="CAM"/>
+      </task>
+    </adaptive_block>
+
     <block name="stay_p1">
       <stay wp="p1"/>
     </block>
